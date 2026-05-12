@@ -1,0 +1,33 @@
+{
+  "id": "analytics-prompt-total-calls",
+  "name": "Prompt Total Calls",
+  "description": "Total number of calls for selected prompt",
+  "category": "Prompts",
+  "version": "1.0.0",
+  "author": "OptOrch",
+  "component": "PromptTotalCallsWidget",
+  "entrypoint": "prompt-total-calls.js",
+  "defaultSize": {
+    "width": 1,
+    "height": 1
+  },
+  "minSize": {
+    "width": 1,
+    "height": 1
+  },
+  "maxSize": {
+    "width": 2,
+    "height": 1
+  },
+  "configSchema": [
+    {
+      "name": "version",
+      "label": "Version (optional)",
+      "type": "text",
+      "required": false,
+      "placeholder": "Auto-detected or leave empty for all versions"
+    },
+    "@shared/timeWindow",
+    "@shared/refreshInterval"
+  ]
+}

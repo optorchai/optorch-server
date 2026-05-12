@@ -1,0 +1,9 @@
+{
+  "id": "server-prompts",
+  "label": "Prompts",
+  "path": "/server/prompts",
+  "icon": "ChatBubbleLeftRightIcon",
+  "order": 62,
+  "component": "server-prompts-page",
+  "url": "/pages/prompts/prompts.js"
+}

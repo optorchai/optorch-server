@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Optorch API Documentation</title>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css" />
+		<link rel="stylesheet" href="/docs/assets/theme.css" />
+	</head>
+	<body>
+		<header>
+			<span>Optorch API Documentation</span>
+			<div class="apiVersion">
+				<span>API Version:</span>
+				<select id="versionSelector"></select>
+			</div>
+		</header>
+		<div id="swagger-ui">
+			<div class="sidebar" id="sidebar"></div>
+			<main id="swaggerContainer">
+				<div class="auth-info" id="authInfo">
+					<div class="auth-section">
+						<h4>🔐 Authentication Required</h4>
+						<p>
+							All API endpoints require authentication. Use the <strong>"Authorize"</strong> button in the Swagger UI below to configure your authentication:
+						</p>
+						<ul>
+							<li><strong>Bearer Token:</strong> Enter your JWT token</li>
+							<li><strong>Multi-Provider Auth:</strong> Login via authentication flow (JWT, OAuth, API Key supported)</li>
+						</ul>
+						<button id="toggleAuthInfo" onclick="document.getElementById('authInfo').style.display='none'">Hide Info</button>
+					</div>
+				</div>
+				<div class="token-info" id="tokenInfo" style="display: none">
+					<div class="token-section">
+						<h4>✅ Authenticated</h4>
+						<p>You are authenticated and ready to test API endpoints. Your authentication token:</p>
+						<div class="token-display">
+							<strong>Token:</strong> <span id="tokenValue" class="token-value">••••••••</span>
+							<button id="toggleToken" onclick="toggleTokenVisibility()" class="token-toggle">Show</button>
+						</div>
+						<div class="token-status" id="tokenStatus"><strong>Status:</strong> <span id="authStatus">Setting up authentication...</span></div>
+						<p class="token-note">All API calls below will automatically use this token. Click "Try it out" on any endpoint to test.</p>
+					</div>
+				</div>
+			</main>
+		</div>
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js"></script>
+		<script>
+			const versionSelector = document.getElementById("versionSelector");
+			const sidebar = document.getElementById("sidebar");
+			const swaggerContainer = document.getElementById("swaggerContainer");
+
+			// Global variables for token management
+			let currentToken = null;
+			let isTokenVisible = false;
+
+			// Get token from URL parameters or localStorage
+			function getToken() {
+				const urlParams = new URLSearchParams(window.location.search);
+				const urlToken = urlParams.get("token");
+				if (urlToken) return urlToken;
+				
+				// Check localStorage for optorch token
+				return localStorage.getItem("optorch_token");
+			}
+
+			// Toggle token visibility
+			function toggleTokenVisibility() {
+				const tokenValueEl = document.getElementById("tokenValue");
+				const toggleButton = document.getElementById("toggleToken");
+
+				if (isTokenVisible) {
+					tokenValueEl.textContent = "••••••••";
+					toggleButton.textContent = "Show";
+					isTokenVisible = false;
+				} else {
+					tokenValueEl.textContent = currentToken;
+					toggleButton.textContent = "Hide";
+					isTokenVisible = true;
+				}
+			}
+
+			// Make toggle function available globally
+			window.toggleTokenVisibility = toggleTokenVisibility;
+
+			// Setup token display
+			function setupTokenDisplay(token) {
+				if (token) {
+					currentToken = token;
+					document.getElementById("authInfo").style.display = "none";
+					document.getElementById("tokenInfo").style.display = "block";
+
+					// Show first 10 and last 10 characters of token by default
+					const maskedToken = token.length > 20 ? `${token.substring(0, 10)}...${token.substring(token.length - 10)}` : "••••••••";
+					document.getElementById("tokenValue").textContent = maskedToken;
+				} else {
+					console.log("⚠️ No token provided to setupTokenDisplay");
+				}
+			}
+
+			fetch("/docs/versions.json")
+				.then((res) => res.json())
+				.then(({ versions }) => {
+					versions.forEach((v) => {
+						const opt = document.createElement("option");
+						opt.value = v;
+						opt.text = v;
+						versionSelector.appendChild(opt);
+					});
+
+					// Check for token
+					const token = getToken();
+					if (token) {
+						setupTokenDisplay(token);
+					}
+
+					loadSwagger(versionSelector.value);
+				});
+
+			versionSelector.addEventListener("change", () => {
+				loadSwagger(versionSelector.value);
+			});
+
+			function toOperationId(tag, method, path) {
+				// FastAPI generates operationIds from function names
+				// We need to find the actual operation in Swagger UI's DOM
+				// Since we can't predict the function name, we'll search by path+method
+				return null; // Signal to use fallback search
+			}
+
+			function expandOperation(tag, method, path) {
+				const operationId = toOperationId(tag, method, path);
+				const layoutActions = window.ui?.getSystem?.().layoutActions;
+
+				if (layoutActions && typeof layoutActions.show === "function") {
+					layoutActions.show(true, operationId);
+				} else {
+					console.warn("Swagger layoutActions not available");
+				}
+			}
+
+			function loadSwagger(version) {
+				sidebar.innerHTML = "";
+
+				// Preserve both auth sections
+				const authInfo = document.getElementById("authInfo");
+				const tokenInfo = document.getElementById("tokenInfo");
+				const authInfoClone = authInfo ? authInfo.cloneNode(true) : null;
+				const tokenInfoClone = tokenInfo ? tokenInfo.cloneNode(true) : null;
+
+				swaggerContainer.innerHTML = "";
+
+				// Re-add the auth sections if they existed
+				if (authInfoClone) {
+					swaggerContainer.appendChild(authInfoClone);
+				}
+				if (tokenInfoClone) {
+					swaggerContainer.appendChild(tokenInfoClone);
+				}
+
+				// Re-setup token display after DOM reconstruction
+				const token = getToken();
+				if (token && !currentToken) {
+					setupTokenDisplay(token);
+				} else if (currentToken) {
+					// Re-apply existing token state
+					setupTokenDisplay(currentToken);
+				}
+
+				const url = `/docs/${version}/openapi.json`;
+
+				// Create a container for the actual Swagger UI
+				const swaggerContent = document.createElement("div");
+				swaggerContent.id = "swagger-content";
+				swaggerContainer.appendChild(swaggerContent);
+
+				window.ui = SwaggerUIBundle({
+					url,
+					domNode: swaggerContent,
+					deepLinking: true,
+					presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+					layout: "BaseLayout",
+					persistAuthorization: true,
+					displayRequestDuration: true,
+					filter: true,
+					showExtensions: true,
+					showCommonExtensions: true,
+					initOAuth: {
+						appName: "Optorch API",
+						clientId: "swagger-ui",
+						scopes: "read write",
+					},
+					onComplete: function () {
+						// Check for auth token
+						let token = getToken();
+
+						if (token) {
+							try {
+								// Setup token display first
+								if (!currentToken) {
+									setupTokenDisplay(token);
+								}
+
+								// Update status
+								const statusEl = document.getElementById("authStatus");
+								if (statusEl) statusEl.textContent = "Applying token to Swagger UI...";
+
+								// Use the Swagger UI authorization method
+								setTimeout(() => {
+									try {
+										// Set bearer token authorization
+										const authActions = ui.authActions;
+										if (authActions && authActions.authorize) {
+											authActions.authorize({
+												bearerAuth: {
+													name: "bearerAuth",
+													schema: {
+														type: "http",
+														scheme: "bearer",
+													},
+													value: token,
+												},
+											});
+											if (statusEl) statusEl.textContent = "✅ Token applied successfully";
+										}
+									} catch (e) {
+										console.warn("authActions.authorize failed:", e);
+										if (statusEl) statusEl.textContent = "⚠️ Token application may have issues";
+									}
+
+									// Add visual indicators
+									setTimeout(() => {
+										const authButton = document.querySelector(".auth-wrapper .authorize");
+										if (authButton) {
+											authButton.style.backgroundColor = "#49cc90";
+											authButton.style.color = "white";
+											authButton.title = "Authenticated with provided token";
+										}
+
+										// Try to trigger a re-render to show the authorization
+										try {
+											const authSelectors = ui.authSelectors;
+											if (authSelectors) {
+												console.log("🔍 Current auth state:", authSelectors.authorized());
+											}
+										} catch (e) {
+											console.warn("Could not check auth state:", e);
+										}
+									}, 500);
+								}, 1000);
+							} catch (error) {
+								console.error("❌ Failed to auto-authorize with token:", error);
+								const statusEl = document.getElementById("authStatus");
+								if (statusEl) statusEl.textContent = "❌ Token application failed";
+							}
+						} else {
+							console.log("ℹ️ No token provided, showing auth info");
+						}
+
+						const spec = ui.specSelectors.specJson().toJS();
+						const tagsMap = {};
+
+						Object.entries(spec.paths).forEach(([path, ops]) => {
+							Object.entries(ops).forEach(([method, op]) => {
+								const tag = op.tags?.[0] || "General";
+								if (!tagsMap[tag]) tagsMap[tag] = [];
+								tagsMap[tag].push({
+									path,
+									method,
+									summary: op.summary || path,
+								});
+							});
+						});
+						const navHeadings = [];
+						for (const [tag, items] of Object.entries(tagsMap)) {
+							const formattedTag = tag.replace(/ /g, "_");
+							const heading = document.createElement("h3");
+							const div = document.createElement("div");
+							const ul = document.createElement("ul");
+							div.appendChild(ul);
+
+							navHeadings.push(heading);
+
+							heading.textContent = tag;
+							heading.addEventListener("click", (e) => {
+								const activeClassName = "active";
+								navHeadings.map((navHeading) => {
+									navHeading.classList.remove(activeClassName);
+									navHeading.nextElementSibling.classList.remove(activeClassName);
+								});
+
+								const ul = heading.nextElementSibling;
+								ul.classList.toggle(activeClassName);
+								e.target.classList.toggle(activeClassName);
+							});
+
+							items.forEach(({ path, method, summary }) => {
+								const li = document.createElement("li");
+								const a = document.createElement("a");
+								li.classList.add(method);
+								const operationId = toOperationId(tag, method, path);
+
+								a.href = `#/${formattedTag}/${operationId}`;
+								a.innerHTML = `
+								<span class="left">
+									<span class="badge ${method.toLowerCase()}">${method.toUpperCase()}</span>
+								</span> 
+								<span class="right name">${summary}</span>`;
+								a.addEventListener("click", (e) => {
+									e.preventDefault();
+									
+									// Find operation by path and method since we can't predict FastAPI's operationId
+									setTimeout(() => {
+										let target = null;
+										const allOps = document.querySelectorAll(".opblock");
+										
+										for (const op of allOps) {
+											const pathEl = op.querySelector(".opblock-summary-path span");
+											const methodEl = op.querySelector(".opblock-summary-method");
+											if (pathEl && methodEl) {
+												const opPath = pathEl.textContent.trim();
+												const opMethod = methodEl.textContent.trim().toLowerCase();
+												if (opPath === path && opMethod === method.toLowerCase()) {
+													target = op;
+													break;
+												}
+											}
+										}
+										
+										if (target) {
+											// Update hash
+											window.location.hash = `#/${tag.replace(/ /g, "_")}/${target.id}`;
+											
+											// Scroll to element
+											target.scrollIntoView({
+												behavior: "smooth",
+												block: "start",
+											});
+
+											// Close all other open panels
+											document.querySelectorAll(".opblock.is-open").forEach((panel) => {
+												if (panel !== target) {
+													const toggle = panel.querySelector(".opblock-summary-control");
+													if (toggle) toggle.click();
+												}
+											});
+
+											// Expand operation panel if not already open
+											if (!target.classList.contains("is-open")) {
+												const toggleButton = target.querySelector(".opblock-summary-control");
+												if (toggleButton) toggleButton.click();
+											}
+
+											// Highlight
+											document.querySelectorAll(".opblock").forEach((el) => el.classList.remove("highlight"));
+											target.classList.add("highlight");
+										} else {
+											console.warn(`Could not find operation: ${method.toUpperCase()} ${path}`);
+										}
+									}, 300);
+								});
+								li.appendChild(a);
+								ul.appendChild(li);
+							});
+
+							sidebar.appendChild(heading);
+							sidebar.appendChild(div);
+						}
+					},
+				});
+			}
+		</script>
+	</body>
+</html>

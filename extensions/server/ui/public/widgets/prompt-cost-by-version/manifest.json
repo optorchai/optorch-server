@@ -1,0 +1,53 @@
+{
+  "id": "analytics-prompt-cost-by-version",
+  "name": "Prompt Cost by Version",
+  "description": "Cost breakdown by prompt version",
+  "category": "Prompts",
+  "version": "1.0.0",
+  "author": "OptOrch",
+  "component": "PromptCostByVersionWidget",
+  "entrypoint": "prompt-cost-by-version.js",
+  "defaultSize": {
+    "width": 2,
+    "height": 2
+  },
+  "minSize": {
+    "width": 1,
+    "height": 1
+  },
+  "maxSize": {
+    "width": 3,
+    "height": 3
+  },
+  "configSchema": [
+    "@shared/currency",
+    "@shared/visualizationType",
+    "@shared/showLegend",
+    "@shared/timeWindow",
+    "@shared/refreshInterval",
+    {
+      "name": "showCallCount",
+      "label": "Show Call Count",
+      "type": "checkbox",
+      "defaultValue": true
+    },
+    {
+      "name": "showTokenCount",
+      "label": "Show Token Count",
+      "type": "checkbox",
+      "defaultValue": true
+    },
+    {
+      "name": "showLatency",
+      "label": "Show Latency",
+      "type": "checkbox",
+      "defaultValue": true
+    },
+    {
+      "name": "showSuccessRate",
+      "label": "Show Success Rate",
+      "type": "checkbox",
+      "defaultValue": true
+    }
+  ]
+}

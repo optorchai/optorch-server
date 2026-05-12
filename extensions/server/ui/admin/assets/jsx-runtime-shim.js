@@ -1,0 +1,1 @@
+export const{jsx:jsx,jsxs:jsxs,Fragment:Fragment}=window.ReactJSXRuntime;
