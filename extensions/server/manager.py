@@ -53,19 +53,60 @@ class ServerManager:
         self.ui_manager = UIManager(api_prefix=self._server_config.api_prefix)
     
     def discover_extensions(self) -> list[str]:
-        """Auto-discover extensions and app with server_initializer.py"""
-        base_dir = Path(__file__).parent.parent.parent
-        discovered = []
+        """Auto-discover extensions and app with server_initializer.py
         
+        Resolves extensions across PEP 420 namespace packages installed
+        from sibling repos (editable or regular) so multi-repo setups work.
+        """
+        base_dir = Path(__file__).parent.parent.parent
+        discovered: list[str] = []
+        seen: set[str] = set()
+        candidate_dirs: list[tuple[str, Path]] = []
+        
+        # 1. local extensions dir
         extensions_path = Path(self._server_config.extensions_dir)
         if not extensions_path.is_absolute():
             extensions_path = base_dir / extensions_path
-        
         if extensions_path.exists():
             extensions_module = extensions_path.name
             for ext_dir in extensions_path.iterdir():
-                if ext_dir.is_dir() and (ext_dir / "server_initializer.py").exists():
-                    discovered.append(f"{extensions_module}.{ext_dir.name}")
+                if ext_dir.is_dir():
+                    candidate_dirs.append((extensions_module, ext_dir))
+        
+        # 2. live `extensions` namespace package paths (covers regular installs)
+        try:
+            import extensions as extensions_pkg
+            for ns_path in extensions_pkg.__path__:
+                ns_dir = Path(ns_path)
+                if not ns_dir.exists():
+                    continue
+                for ext_dir in ns_dir.iterdir():
+                    if ext_dir.is_dir():
+                        candidate_dirs.append(("extensions", ext_dir))
+        except ImportError:
+            pass
+        
+        # 3. setuptools editable installs - pull from finder MAPPING dicts
+        import sys
+        for mod_name, mod in list(sys.modules.items()):
+            if not mod_name.startswith("__editable__"):
+                continue
+            mapping = getattr(mod, "MAPPING", None)
+            if not isinstance(mapping, dict):
+                continue
+            for fullname, src_path in mapping.items():
+                if not fullname.startswith("extensions."):
+                    continue
+                p = Path(src_path)
+                if p.is_dir():
+                    candidate_dirs.append(("extensions", p))
+        
+        for module_prefix, ext_dir in candidate_dirs:
+            if ext_dir.name in seen:
+                continue
+            if (ext_dir / "server_initializer.py").exists():
+                discovered.append(f"{module_prefix}.{ext_dir.name}")
+                seen.add(ext_dir.name)
         
         app_path = Path(self._server_config.app_dir)
         if not app_path.is_absolute():

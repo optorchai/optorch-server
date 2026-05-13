@@ -1,6 +1,5 @@
 """prompt management REST endpoints"""
 from typing import Optional
-from datetime import datetime
 from fastapi import Query, Depends, Body, Request
 from extensions.server.routing import APIRouter, capability
 from extensions.server.models.prompt import (
@@ -44,6 +43,8 @@ async def get_prompt_versions(
     **Returns:**
     List of prompt versions with id, name, version, content, metadata, timestamps
     """
+    if not storage.query_registry.has(storage.config.store, "prompt.versions"):
+        return PromptVersionListResponse(prompts=[], total=0, limit=limit, offset=offset)
     result = await storage.query("prompt.versions", name=name, limit=limit, offset=offset)
     return PromptVersionListResponse(**result)
 
@@ -95,37 +96,19 @@ async def register_prompt(
     }
     ```
     """
-    import json
-    
-    query = """
-        INSERT INTO prompts (name, version, content, metadata, created_at)
-        VALUES (:name, :version, :content, :metadata, :created_at)
-        ON CONFLICT (name, version) DO NOTHING
-        RETURNING id
-    """
-    
-    metadata = {
-        "variables": prompt.variables or [],
-        "description": prompt.description,
-        "tags": prompt.tags or []
-    }
-    
     try:
-        result = await storage.fetch_one(
-            query=query,
-            values={
-                "name": prompt.name,
-                "version": prompt.version,
-                "content": prompt.template,
-                "metadata": json.dumps(metadata),
-                "created_at": datetime.utcnow()
-            }
+        result = await storage.query(
+            "prompt.register",
+            name=prompt.name,
+            version=prompt.version,
+            template=prompt.template,
+            variables=prompt.variables,
+            description=prompt.description,
+            tags=prompt.tags,
         )
-        
-        if result:
+        if result.get("created"):
             return {"id": result["id"], "status": "created"}
-        else:
-            return {"status": "already_exists"}
+        return {"id": result.get("id"), "status": "already_exists"}
     except Exception as e:
         raise HTTPError(str(e), status_code=500, details={"prompt": prompt.name})
 

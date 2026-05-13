@@ -41,6 +41,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             "/identity/auth/oidc/",      # OIDC callbacks
             "/identity/auth/saml/",      # SAML endpoints
             "/service-map",               # service map discovery
+            "/ui/",                       # UI bootstrap (manifest, widgets, chat extensions)
         ]
         
         # add extra public paths from config (app-specific)
