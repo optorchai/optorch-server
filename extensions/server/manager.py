@@ -108,13 +108,17 @@ class ServerManager:
                 discovered.append(f"{module_prefix}.{ext_dir.name}")
                 seen.add(ext_dir.name)
         
-        app_path = Path(self._server_config.app_dir)
-        if not app_path.is_absolute():
-            app_path = base_dir / app_path
-        
-        if (app_path / "server_initializer.py").exists():
-            app_module = app_path.name
-            discovered.append(app_module)
+        app_module = self._server_config.app_dir
+        if app_module:
+            try:
+                importlib.import_module(f"{app_module}.server_initializer")
+                discovered.append(app_module)
+            except ImportError:
+                app_path = Path(app_module)
+                if not app_path.is_absolute():
+                    app_path = base_dir / app_path
+                if (app_path / "server_initializer.py").exists():
+                    discovered.append(app_path.name)
         
         return discovered
     
@@ -353,24 +357,25 @@ class ServerManager:
         )
     
     async def _initialize_storage(self, app: FastAPI) -> None:
-        """Initialize storage if read_db or write_db capability present"""
+        """Hook server queries onto orchestrator's storage_manager
+        
+        The orchestrator already builds a StorageManager into its container. Lets piggyback off that
+        """
         if not self.profile_manager.has_capability({"read_db", "write_db"}):
             logger.debug("No database capabilities - skipping storage init")
             app.state.storage = None
             return
         
-        from optorch.storage.initializer import StoragePackageInitializer
-        from optorch.storage.types import StorageRole
+        orchestrator = getattr(app.state, "orchestrator", None)
+        storage = getattr(orchestrator.container, "storage_manager", None) if orchestrator else None
         
-        has_write = self.profile_manager.has_capability("write_db")
-        role = StorageRole.READ_WRITE if has_write else StorageRole.READ
-        
-        storage = StoragePackageInitializer.initialize(config_manager=self.config_manager, overrides={"role": role})
-        
-        if not storage:
-            logger.warning("storage initialization returned None")
+        if storage is None:
+            logger.warning("orchestrator has no storage_manager - server queries unavailable")
             app.state.storage = None
             return
+        
+        from optorch.storage.types import StorageRole
+        storage.config.role = StorageRole.READ_WRITE if self.profile_manager.has_capability("write_db") else StorageRole.READ
         
         await storage._ensure_initialized()
         
@@ -380,19 +385,13 @@ class ServerManager:
         app.state.storage = storage
         
         logger.info(
-            f"Storage initialized: role={storage.config.role.name}, "
+            f"Storage hooked: role={storage.config.role.name}, "
             f"store={storage.config.store}, pool_size={storage.config.pool_size}"
         )
     
     async def _shutdown_storage(self, app: FastAPI) -> None:
-        """Cleanup storage connection on shutdown"""
-        if hasattr(app.state, 'storage') and app.state.storage:
-            try:
-                await app.state.storage.disconnect()
-                logger.info("Storage cleanup complete")
-            except Exception as e:
-                logger.error(f"Storage cleanup error: {e}")
-            app.state.storage = None
+        """Storage is owned by orchestrator container - clear our reference only"""
+        app.state.storage = None
     
     async def _initialize_orchestrator(self, app: FastAPI) -> None:
         """Initialize orchestrator instance and store in app state"""

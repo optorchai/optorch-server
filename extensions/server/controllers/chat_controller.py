@@ -129,6 +129,14 @@ class ChatController:
             
         except Exception as e:
             logger.error(f"Chat stream error: {e}", exc_info=True)
+            try:
+                if self.orchestrator and self.orchestrator.container.event_emitter:
+                    self.orchestrator.container.event_emitter.emit(
+                        "chat.error",
+                        {"session_id": request.session_id, "error": str(e), "error_type": type(e).__name__},
+                    )
+            except Exception:
+                pass
             error_event = ErrorEvent(message=str(e))
             yield f"data: {error_event.model_dump_json()}\n\n"
 
