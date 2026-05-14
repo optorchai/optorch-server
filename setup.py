@@ -16,7 +16,7 @@ setup(
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
     ],
-    url="https://github.com/crismc/optorch-server",
+    url="https://github.com/optorchai/optorch-server",
     packages=find_packages(include=["extensions.server", "extensions.server.*"]),
     install_requires=[
         "optorch>=0.1.0",

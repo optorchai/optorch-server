@@ -1,6 +1,6 @@
 # optorch-server
 
-FastAPI HTTP server extension for [Optorch](https://github.com/crismc/optorch). Provides REST and SSE endpoints for orchestrator workflow execution, session management, configuration, identity, and admin UI hosting.
+FastAPI HTTP server extension for [Optorch](https://github.com/optorchai/optorch). Provides REST and SSE endpoints for orchestrator workflow execution, session management, configuration, identity, and admin UI hosting.
 
 ## Purpose
 
@@ -358,4 +358,4 @@ extensions/server/
 
 ## License
 
-Proprietary. See [optorch](https://github.com/crismc/optorch).
+Proprietary. See [optorch](https://github.com/optorchai/optorch).
