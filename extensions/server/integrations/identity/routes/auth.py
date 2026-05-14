@@ -199,6 +199,11 @@ async def login(
         
         individual.current_org_id = request_data.org_id
         individual.roles = membership.roles
+    elif not individual.current_org_id:
+        memberships = await identity.org.list_memberships(individual.id)
+        if memberships:
+            individual.current_org_id = str(memberships[0].organization_id)
+            individual.roles = memberships[0].roles
     
     token_pair = await identity.authn.issue_token(individual, include_refresh_token=True)
     
