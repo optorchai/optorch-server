@@ -69,8 +69,30 @@ class ServerServerInitializer:
     def register_backoffice(manager: UIManager, config: ConfigManager) -> None:
         """Register server pages/widgets in backoffice UI"""
         from extensions.server.ui import UIExtensionConfig
-        
+
         ui_config = UIExtensionConfig(extension_root=Path(__file__).parent, extension_name="server")
         manager.pages.discover(ui_config)
         manager.widgets.discover(ui_config)
+
+        chat_ext_dir = Path(__file__).parent / "ui" / "chat_extensions"
+        manager.chat_extensions.register({
+            "id": "download-link",
+            "name": "Download Link Extension",
+            "description": "Renders download buttons for file downloads",
+            "version": "1.0.0",
+            "source_path": str(chat_ext_dir / "download.js"),
+            "author": "OptOrch Team",
+            "tags": ["downloads", "files"],
+        })
+        
+        manager.chat_extensions.register({
+            "id": "json-table",
+            "name": "JSON Table Renderer",
+            "description": "Renders flat JSON code blocks as readable tables with a raw JSON toggle",
+            "version": "1.0.0",
+            "source_path": str(chat_ext_dir / "json-table.js"),
+            "author": "OptOrch Team",
+            "tags": ["json", "tables", "formatting"],
+        })
+
         logger.info("Server backoffice pages/widgets registered")
