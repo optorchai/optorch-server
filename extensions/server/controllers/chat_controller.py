@@ -2,7 +2,7 @@
 import asyncio
 import json
 from optorch.logging import get_logger
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 from optorch.estrator import Orchestrator
 from optorch.state.streaming_state import StreamingState
 from extensions.server.services import SessionService, EventService
@@ -12,6 +12,7 @@ from optorch.llm.lifecycle.context_factory import LLMContextFactory
 from optorch.llm.lifecycle.hooks import LLMLifecycleHook
 from optorch.utils.json_encoder import DecimalEncoder
 from optorch.errors import error_context, ConfigurationError
+from optorch.history.conversation_history import ConversationHistory
 
 logger = get_logger(__name__)
 
@@ -23,11 +24,13 @@ class ChatController:
         self,
         orchestrator: Orchestrator,
         session_service: SessionService,
-        event_service: EventService
+        event_service: EventService,
+        history: Optional[ConversationHistory] = None,
     ):
         self.orchestrator = orchestrator
         self.session = session_service
         self.events = event_service
+        self._history = history
 
     @error_context(component="api", phase="stream_chat")
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[str, None]:
@@ -56,12 +59,21 @@ class ChatController:
 
             LLMContextFactory.register.user_callback(LLMLifecycleHook.FINALIZE, on_lifecycle_complete, callback_tag)
 
+            session_manager = self.orchestrator.container.session_manager
+            
+            if self._history and session_manager and request.session_id:
+                restored = await self._history.restore_to_session(request.session_id, session_manager)
+                
+                if restored:
+                    logger.debug(f"cold start: restored {restored} messages for session {request.session_id}")
+
             orchestration_task = asyncio.create_task(
                 self.orchestrator.run(  # type: ignore[arg-type]
                     {
                         "session_id": request.session_id, 
                         "user_message": request.message,
-                        "suggestions": request.suggestions or False
+                        "suggestions": request.suggestions or False,
+                        "source": request.source,
                     },
                     tone=request.tone
                 )

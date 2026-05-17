@@ -9,6 +9,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from optorch.logging import get_logger
 from optorch.identity.context import IdentityContext
+from optorch.tenant_context import TenantContext
 
 logger = get_logger(__name__)
 
@@ -56,6 +57,19 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             ctx = IdentityContext()
             ctx.set_current_org(org_id)
             logger.debug(f"ambient tenant context set: {org_id}")
+
+        user = getattr(request.state, "user", None)
+        if user is not None:
+            user_id = getattr(user, "id", None)
+
+            if user_id:
+                TenantContext.set(
+                    application_id="orchestrator",
+                    user_id=user_id,
+                    client_id=org_id,
+                )
+                
+                logger.debug(f"tenant context user_id set: {user_id}")
         
         response = await call_next(request)
         return response

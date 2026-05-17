@@ -37,3 +37,8 @@ class ChatRequest(BaseModel):
         True,
         description="Whether to generate suggested follow-up replies"
     )
+    source: Optional[str] = Field(
+        None,
+        description="Distribution channel identifier (e.g. 'web-widget', 'public-chatbot', 'slack'). Anonymous/public callers should set this.",
+        examples=["web-widget"]
+    )

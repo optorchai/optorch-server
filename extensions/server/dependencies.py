@@ -8,6 +8,7 @@ from extensions.server.ui import UIManager
 
 if TYPE_CHECKING:
     from optorch.storage.manager import StorageManager
+    from optorch.history.conversation_history import ConversationHistory
 
 
 def get_orchestrator(request: Request) -> Orchestrator:
@@ -86,15 +87,22 @@ def get_identity_context(request: Request) -> Optional[IdentityContext]:
     return ctx
 
 
+def get_conversation_history(request: Request) -> "ConversationHistory":
+    from optorch.history.conversation_history import ConversationHistory
+    return ConversationHistory(get_storage(request))
+
+
 def get_chat_controller(request: Request):
     """Get chat controller with dependencies"""
     from extensions.server.controllers.chat_controller import ChatController
     from extensions.server.services import SessionService, EventService
-    
+
     orchestrator = get_orchestrator(request)
     session_service = SessionService(orchestrator)
     event_service = EventService()
-    return ChatController(orchestrator, session_service, event_service)
+    history = get_conversation_history(request) if hasattr(request.app.state, "storage") else None
+    
+    return ChatController(orchestrator, session_service, event_service, history)
 
 
 def get_health_controller(request: Request):
