@@ -70,6 +70,7 @@ class IdentityIntegration:
             AuthenticationMiddleware, 
             priority=900, 
             api_prefix=api_prefix,
-            extra_public_paths=extra_public_paths
+            extra_public_paths=extra_public_paths,
+            default_application_id=server_config.application_id
         )
         manager.middleware_manager.register("identity_authorization", AuthorizationMiddleware, priority=800)

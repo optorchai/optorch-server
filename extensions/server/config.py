@@ -70,6 +70,10 @@ class ServerConfig(BaseModel):
         default="/admin",
         description="URL path for admin UI (requires admin_ui capability)"
     )
+    application_id: str = Field(
+        default="OptOrch-Application",
+        description="Default application_id for TenantContext when not provided by caller via X-Application-ID header"
+    )
     
     @property
     def api_prefix(self) -> str:

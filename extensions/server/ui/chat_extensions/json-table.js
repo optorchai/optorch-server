@@ -1,8 +1,8 @@
 /**
  * JSON Table Extension
  *
- * Transforms flat JSON code blocks in assistant messages into readable tables.
- * Deeply nested JSON falls back to the raw code block.
+ * Transforms JSON code blocks in assistant messages into readable tables.
+ * Flat objects/arrays → clean table. Nested objects → table with expandable cells.
  */
 
 function esc(s) {
@@ -51,11 +51,59 @@ function arrayTable(arr) {
   return `<table class="json-table">${head}${body}</table>`;
 }
 
+function anyTable(parsed, depth) {
+  depth = depth || 0;
+  if (typeof parsed !== "object" || parsed === null) return null;
+
+  if (Array.isArray(parsed)) {
+    if (isArrayOfFlat(parsed)) return arrayTable(parsed);
+    // array of complex items — numbered expandable rows
+    const rows = parsed
+      .map((item, i) => {
+        const inner =
+          typeof item === "object" && item !== null
+            ? (anyTable(item, depth + 1) ??
+              `<pre>${esc(JSON.stringify(item, null, 2))}</pre>`)
+            : fmtValue(item);
+        return `<tr><td class="json-key">${i + 1}</td><td class="json-val"><details><summary class="json-expand">[${
+          Array.isArray(item)
+            ? item.length + " items"
+            : typeof item === "object" && item !== null
+              ? Object.keys(item).length + " fields"
+              : ""
+        }]</summary>${inner}</details></td></tr>`;
+      })
+      .join("");
+    return `<table class="json-table"><tbody>${rows}</tbody></table>`;
+  }
+
+  if (isFlat(parsed)) return objectTable(parsed);
+
+  const rows = Object.entries(parsed)
+    .map(([k, v]) => {
+      if (v === null || typeof v !== "object") {
+        return `<tr><td class="json-key">${esc(k)}</td><td class="json-val">${fmtValue(v)}</td></tr>`;
+      }
+      const summary = Array.isArray(v)
+        ? `${v.length} item${v.length !== 1 ? "s" : ""}`
+        : `${Object.keys(v).length} field${Object.keys(v).length !== 1 ? "s" : ""}`;
+      const inner =
+        depth < 2
+          ? (anyTable(v, depth + 1) ??
+            `<pre>${esc(JSON.stringify(v, null, 2))}</pre>`)
+          : `<pre>${esc(JSON.stringify(v, null, 2))}</pre>`;
+      return `<tr><td class="json-key">${esc(k)}</td><td class="json-val"><details><summary class="json-expand">[${summary}]</summary>${inner}</details></td></tr>`;
+    })
+    .join("");
+  return `<table class="json-table"><tbody>${rows}</tbody></table>`;
+}
+
 function toBlock(raw) {
   try {
     const parsed = JSON.parse(raw.trim());
-    if (!isFlat(parsed) && !isArrayOfFlat(parsed)) return null;
-    const table = isFlat(parsed) ? objectTable(parsed) : arrayTable(parsed);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const table = anyTable(parsed, 0);
+    if (!table) return null;
     return `<div class="json-block">${table}<details class="json-raw"><summary>View raw JSON</summary><pre><code class="language-json">${esc(raw)}</code></pre></details></div>`;
   } catch {
     return null;

@@ -7,9 +7,12 @@ from extensions.server.models.conversation_list_response import ConversationList
 from extensions.server.models.conversation_item import ConversationItem
 from extensions.server.models.session_messages_response import SessionMessagesResponse
 from extensions.server.models.session_resume_response import SessionResumeResponse
+from extensions.server.models.session_event_item import SessionEventItem
+from extensions.server.models.session_events_response import SessionEventsResponse
 from extensions.server.models.message_item import MessageItem
 from extensions.server.dependencies import get_orchestrator, get_conversation_history
-from extensions.server.integrations.identity.dependencies import require_permission
+from extensions.server.integrations.identity.dependencies import require_permission, get_identity
+from optorch.identity.manager import IdentityManager
 from optorch.estrator import Orchestrator
 from optorch.history.conversation_history import ConversationHistory
 from optorch.identity.authentication.models import Individual
@@ -29,9 +32,9 @@ def _check_org_access(user: Individual, organization_id: Optional[str]) -> None:
     summary="List conversation sessions",
     description="""Returns a paginated list of conversation sessions stored in the database.
 
-By default returns only the calling user's own sessions. Provide `organization_id` to
-scope results to an org (must be the user's active org). Results are ordered by
-creation time descending (newest first).
+Returns all sessions for the user's active organization.
+Provide `user_id` to filter by a specific user (admin only). Results are ordered by creation
+time descending (newest first).
 """
 )
 @capability("read_db")
@@ -42,18 +45,23 @@ async def list_sessions(
     offset: int = Query(0, ge=0),
     history: ConversationHistory = Depends(get_conversation_history),
     user: Individual = Depends(require_permission("session", "read")),
+    identity: IdentityManager = Depends(get_identity),
 ) -> ConversationListResponse:
     if organization_id is not None:
         _check_org_access(user, organization_id)
-        effective_user_id = user_id  # org-scoped: optional user filter
     else:
-        effective_user_id = user.id  # default: caller's own sessions only
+        organization_id = user.current_org_id
+
+    if user_id is not None and user_id != user.id:
+        permitted = await identity.check_permission(resource="session", action="read_any", user=user.model_dump())
+        if not permitted:
+            raise HTTPException(status_code=403, detail="Access denied")
 
     rows = await history.list(
         organization_id=organization_id,
-        user_id=effective_user_id,
+        user_id=user_id,
         limit=limit,
-        offset=offset,
+        offset=offset
     )
 
     items = [ConversationItem(**row) for row in rows]
@@ -115,9 +123,12 @@ async def get_session(
 ) -> ConversationItem:
     """Get metadata for a single session"""
     row = await history.get(session_id=session_id)
+
     if row is None:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    
     _check_org_access(user, row.get("organization_id"))
+    
     return ConversationItem(**row)
 
 
@@ -140,12 +151,45 @@ async def resume_session(
 ) -> SessionResumeResponse:
     """Return metadata + thread messages in one call"""
     conversation, messages = await history.resume(session_id=session_id)
+
     if conversation is None:
-        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        return SessionResumeResponse(conversation=None, messages=[])
+
     _check_org_access(user, conversation.get("organization_id"))
+
     return SessionResumeResponse(
         conversation=ConversationItem(**conversation),
         messages=[MessageItem(**m) for m in messages],
+    )
+
+
+@router.get(
+    "/sessions/{session_id}/events",
+    response_model=SessionEventsResponse,
+    summary="Get persisted events for a session",
+    description="""Returns the recorded analytics events for a session, ordered chronologically.
+
+Used to restore companion widget state (costs, tool calls, logs, errors, stream events)
+when resuming a previous session. Excludes auth/authorization events.
+"""
+)
+@capability("read_db")
+async def get_session_events(
+    session_id: str = Path(...),
+    limit: int = Query(500, ge=1, le=2000),
+    history: ConversationHistory = Depends(get_conversation_history),
+    user: Individual = Depends(require_permission("session", "read")),
+) -> SessionEventsResponse:
+    conv = await history.get(session_id=session_id)
+
+    if conv is not None:
+        _check_org_access(user, conv.get("organization_id"))
+
+    rows = await history.get_events(session_id=session_id, limit=limit) if conv is not None else []
+
+    return SessionEventsResponse(
+        session_id=session_id,
+        events=[SessionEventItem(**row) for row in rows],
     )
 
 
@@ -174,11 +218,14 @@ async def delete_session(
     history: ConversationHistory = Depends(get_conversation_history),
     user: Individual = Depends(require_permission("session", "delete")),
 ) -> SessionDeleteResponse:
-    """Delete session — clears in-memory state and archived DB rows"""
     row = await history.get(session_id=session_id)
+    
     if row is not None:
         _check_org_access(user, row.get("organization_id"))
+
     if orchestrator.container.session_manager:
         await orchestrator.container.session_manager.delete(session_id)
+
     await history.delete(session_id=session_id)
+
     return SessionDeleteResponse(success=True, message=f"Session {session_id} deleted")

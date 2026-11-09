@@ -6,7 +6,6 @@ from extensions.server.dependencies import get_ui_manager
 
 router = APIRouter(prefix="/ui")
 
-
 @capability("admin_ui")
 @router.get(
     "/manifest",

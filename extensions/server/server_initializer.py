@@ -35,7 +35,7 @@ class ServerServerInitializer:
             )
             logger.info("CORS middleware enabled")
         
-        manager.register("tenant_context", TenantContextMiddleware, priority=850)
+        manager.register("tenant_context", TenantContextMiddleware, priority=950, default_application_id=server_config.application_id)
         logger.info("Tenant context middleware registered")
     
     @staticmethod

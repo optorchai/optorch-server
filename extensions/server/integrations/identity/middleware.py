@@ -4,6 +4,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from optorch.errors import AuthenticationError, AuthorizationError
+from optorch.tenant_context import TenantContext
 from optorch.logging import get_logger
 
 logger = get_logger(__name__)
@@ -16,9 +17,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     Public paths bypass authentication.
     """
     
-    def __init__(self, app, api_prefix: str = "/api/v1", extra_public_paths: list[str] | None = None):
+    def __init__(self, app, api_prefix: str = "/api/v1", extra_public_paths: list[str] | None = None, default_application_id: str = "orchestrator"):
         super().__init__(app)
         self.api_prefix = api_prefix
+        self.default_application_id = default_application_id
         
         # paths without api prefix
         self.base_public_paths = [
@@ -107,7 +109,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             
             request.state.user = user
             request.state.org_id = user.current_org_id
-            
+
+            application_id = request.headers.get("x-application-id", self.default_application_id)
+            TenantContext.set(application_id=application_id, user_id=user.id, client_id=user.current_org_id)
+
             logger.debug(f"Authenticated user: {user.id}, org: {user.current_org_id}")
         
         except AuthenticationError as e:

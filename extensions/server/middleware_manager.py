@@ -26,7 +26,7 @@ class MiddlewareManager:
         Args:
             name: Unique middleware identifier
             middleware_class: Middleware class to apply
-            priority: Higher = outer (applied first), lower = inner
+            priority: Higher = inner (runs later in request chain), lower = outer (runs first)
             **kwargs: Middleware constructor arguments
         """
         if any(m[1] == name for m in self._middleware):
